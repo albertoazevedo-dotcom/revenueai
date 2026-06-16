@@ -1,645 +1,350 @@
-'use client';
+"use client";
 
+import { useEffect, useState, useCallback } from "react";
 import {
-  Users,
-  Target,
-  Clock,
-  DollarSign,
-  Percent,
-  BarChart2,
-  Tag,
-  TrendingUp,
-} from 'lucide-react';
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-  Cell,
-} from 'recharts';
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
+  PieChart, Pie, Legend, AreaChart, Area, CartesianGrid,
+} from "recharts";
+import { TrendingUp, TrendingDown, DollarSign, Target, AlertCircle, Activity, RefreshCw } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-interface KpiCard {
-  label: string;
-  value: string;
-  delta: string;
-  deltaPositive: boolean;
-  icon: React.ReactNode;
-  iconColor: string;
-  extra?: string;
+interface MonthData { total: number; won: number; lost: number; open: number; amount: number; }
+interface OpenDeal { id: string; name: string; amount: number; stage: string; closeDate: string | null; probability: number | null; pipeline: string; }
+
+interface Summary {
+  total: number; won: number; lost: number; open: number;
+  conversionRate: number; totalAmount: number; wonAmount: number;
+  byMonth: Record<string, MonthData>;
+  lossReasons: [string, number][];
+  openDeals: OpenDeal[];
 }
 
-interface PipelineStage {
-  name: string;
-  count: number;
-  color: string;
-  max: number;
+interface Pipeline { id: string; label: string; }
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+const BRL = (v: number) =>
+  new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 }).format(v);
+
+const fmtDate = (s: string | null) => {
+  if (!s) return "—";
+  try { return new Date(s).toLocaleDateString("pt-BR"); } catch { return s; }
+};
+
+const toISO = (d: Date) => d.toISOString().slice(0, 10);
+
+function daysFromNow(d: Date, n: number) {
+  const r = new Date(d);
+  r.setDate(r.getDate() - n);
+  return r;
 }
 
-interface ChannelConversion {
-  name: string;
-  pct: number;
-  color: string;
-}
+// ─── KPI Card ─────────────────────────────────────────────────────────────────
 
-interface LostDeal {
-  company: string;
-  contact: string;
-  reason: string;
-  badgeColor: string;
-}
-
-interface GapSeller {
-  name: string;
-  days: number;
-  calls: number;
-  barColor: string;
-  textColor: string;
-}
-
-// ─── Data ─────────────────────────────────────────────────────────────────────
-
-const kpiCards: KpiCard[] = [
-  {
-    label: 'LEADS RECEBIDOS',
-    value: '463',
-    delta: '+12% vs mês ant.',
-    deltaPositive: true,
-    icon: <Users size={20} />,
-    iconColor: 'var(--accent-blue)',
-  },
-  {
-    label: 'MQLs NO SLA',
-    value: '80%',
-    delta: '+5% vs mês ant.',
-    deltaPositive: true,
-    icon: <Target size={20} />,
-    iconColor: 'var(--accent-teal)',
-  },
-  {
-    label: 'SLA DE 1º CONTATO',
-    value: '14 min',
-    delta: '-2m vs mês ant.',
-    deltaPositive: true,
-    icon: <Clock size={20} />,
-    iconColor: 'var(--color-orange)',
-  },
-  {
-    label: 'RECEITA ATUAL',
-    value: 'R$ 345.000',
-    delta: '+8% vs mês ant.',
-    deltaPositive: true,
-    icon: <DollarSign size={20} />,
-    iconColor: 'var(--color-green)',
-  },
-  {
-    label: 'CONVERSÃO',
-    value: '5.4%',
-    delta: '-0.2% vs mês ant.',
-    deltaPositive: false,
-    icon: <Percent size={20} />,
-    iconColor: 'var(--color-red)',
-  },
-  {
-    label: 'MTD (MONTH TO DATE)',
-    value: 'R$ 280.000',
-    delta: '',
-    deltaPositive: true,
-    icon: <BarChart2 size={20} />,
-    iconColor: 'var(--accent-purple)',
-    extra: '93% da meta',
-  },
-  {
-    label: 'TICKET MÉDIO',
-    value: 'R$ 13.800',
-    delta: '+5% vs mês ant.',
-    deltaPositive: true,
-    icon: <Tag size={20} />,
-    iconColor: 'var(--accent-blue)',
-  },
-  {
-    label: 'FORECAST',
-    value: 'R$ 510.000',
-    delta: '',
-    deltaPositive: true,
-    icon: <TrendingUp size={20} />,
-    iconColor: 'var(--color-green)',
-    extra: 'Auditoria IA: Alta',
-  },
-];
-
-const pipelineStages: PipelineStage[] = [
-  { name: 'Leads Novos', count: 18, color: 'var(--accent-blue)', max: 250 },
-  { name: 'Tentativa', count: 250, color: 'var(--color-orange)', max: 250 },
-  { name: 'Conectados', count: 110, color: 'var(--color-yellow)', max: 250 },
-  { name: 'Negociações', count: 60, color: 'var(--accent-purple)', max: 250 },
-  { name: 'Proposta Enviada', count: 35, color: 'var(--accent-blue)', max: 250 },
-  { name: 'Ganhos', count: 28, color: 'var(--color-green)', max: 250 },
-  { name: 'Perdidos', count: 22, color: 'var(--color-red)', max: 250 },
-];
-
-const channelConversions: ChannelConversion[] = [
-  { name: 'Meta Ads', pct: 4.2, color: 'var(--accent-blue)' },
-  { name: 'LinkedIn', pct: 6.8, color: 'var(--accent-purple)' },
-  { name: 'Google Ads', pct: 5.1, color: 'var(--accent-teal)' },
-  { name: 'Social', pct: 3.5, color: 'var(--color-orange)' },
-  { name: 'Eventos', pct: 12.0, color: 'var(--color-green)' },
-  { name: 'Indicação', pct: 18.5, color: 'var(--color-yellow)' },
-];
-
-const lostDeals: LostDeal[] = [
-  {
-    company: 'AgroSul S.A.',
-    contact: 'Pedro Alves',
-    reason: 'Budget/Preço Alto',
-    badgeColor: 'var(--color-red)',
-  },
-  {
-    company: 'Finanças Now',
-    contact: 'Carlos Dutra',
-    reason: 'Perdeu para Concorrente',
-    badgeColor: 'var(--color-orange)',
-  },
-];
-
-const gapSellers: GapSeller[] = [
-  { name: 'Pedro Alves', days: 14, calls: 22, barColor: 'var(--color-red)', textColor: 'var(--color-red)' },
-  { name: 'Carlos Dutra', days: 8, calls: 41, barColor: 'var(--color-orange)', textColor: 'var(--color-orange)' },
-  { name: 'Ana Souza', days: 3, calls: 85, barColor: 'var(--color-yellow)', textColor: 'var(--color-yellow)' },
-  { name: 'Lucas BH', days: 1, calls: 112, barColor: 'var(--color-green)', textColor: 'var(--color-green)' },
-];
-
-// ─── Sub-components ───────────────────────────────────────────────────────────
-
-function KpiCardComponent({ card }: { card: KpiCard }) {
+function KpiCard({ label, value, sub, color, icon }: {
+  label: string; value: string; sub?: string; color: string; icon: React.ReactNode;
+}) {
   return (
-    <div
-      style={{
-        background: 'var(--bg-card)',
-        border: '1px solid var(--border-color)',
-        borderRadius: 12,
-        padding: '20px 22px',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 10,
-        transition: 'border-color 0.2s',
-      }}
-    >
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <span
-          style={{
-            fontSize: 10,
-            fontWeight: 700,
-            letterSpacing: '0.08em',
-            color: 'var(--text-muted)',
-            textTransform: 'uppercase',
-          }}
-        >
-          {card.label}
-        </span>
-        <span
-          style={{
-            color: card.iconColor,
-            display: 'flex',
-            alignItems: 'center',
-            background: `${card.iconColor}18`,
-            borderRadius: 8,
-            padding: '5px 6px',
-          }}
-        >
-          {card.icon}
-        </span>
+    <div style={{ background: "var(--bg-card)", border: "1px solid var(--border-color)", borderRadius: 12, padding: "20px 22px", display: "flex", flexDirection: "column", gap: 10 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", color: "var(--text-muted)", textTransform: "uppercase" }}>{label}</span>
+        <span style={{ color, background: `${color}18`, borderRadius: 8, padding: "5px 6px", display: "flex", alignItems: "center" }}>{icon}</span>
       </div>
-      <div style={{ fontSize: 26, fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1 }}>
-        {card.value}
-      </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-        {card.delta && (
-          <span
-            style={{
-              fontSize: 12,
-              fontWeight: 600,
-              color: card.deltaPositive ? 'var(--color-green)' : 'var(--color-red)',
-            }}
-          >
-            {card.delta}
-          </span>
-        )}
-        {card.extra && (
-          <span
-            style={{
-              fontSize: 11,
-              fontWeight: 600,
-              color: 'var(--accent-purple)',
-              background: '#6366f118',
-              borderRadius: 6,
-              padding: '2px 8px',
-            }}
-          >
-            {card.extra}
-          </span>
-        )}
-      </div>
+      <div style={{ fontSize: 26, fontWeight: 700, color, lineHeight: 1 }}>{value}</div>
+      {sub && <div style={{ fontSize: 12, color: "var(--text-muted)" }}>{sub}</div>}
     </div>
   );
 }
 
-function SectionCard({ title, children }: { title: string; children: React.ReactNode }) {
+// ─── Section Card ─────────────────────────────────────────────────────────────
+
+function Card({ title, sub, children, style }: { title: string; sub?: string; children: React.ReactNode; style?: React.CSSProperties }) {
   return (
-    <div
-      style={{
-        background: 'var(--bg-card)',
-        border: '1px solid var(--border-color)',
-        borderRadius: 12,
-        padding: '22px 24px',
-        flex: 1,
-        minWidth: 0,
-      }}
-    >
-      <h3
-        style={{
-          fontSize: 13,
-          fontWeight: 700,
-          color: 'var(--text-primary)',
-          marginBottom: 18,
-          letterSpacing: '0.04em',
-          textTransform: 'uppercase',
-        }}
-      >
-        {title}
-      </h3>
+    <div style={{ background: "var(--bg-card)", border: "1px solid var(--border-color)", borderRadius: 12, padding: "20px 24px", ...style }}>
+      <div style={{ marginBottom: 16 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text-primary)", textTransform: "uppercase", letterSpacing: "0.04em" }}>{title}</div>
+        {sub && <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 3 }}>{sub}</div>}
+      </div>
       {children}
     </div>
   );
 }
 
-function HorizontalBar({
-  label,
-  value,
-  maxValue,
-  color,
-  suffix = '',
-}: {
-  label: string;
-  value: number;
-  maxValue: number;
-  color: string;
-  suffix?: string;
-}) {
-  const pct = Math.min((value / maxValue) * 100, 100);
+// ─── Chart tooltip ────────────────────────────────────────────────────────────
+
+const chartTooltipStyle = {
+  contentStyle: { background: "#111827", border: "1px solid #1e2d4a", borderRadius: 8, fontSize: 12, color: "#e2e8f0" },
+  cursor: { fill: "#ffffff08" },
+};
+
+// ─── Skeleton ─────────────────────────────────────────────────────────────────
+
+function Skeleton({ h = 32, w = "80px" }: { h?: number; w?: string }) {
+  return <div style={{ height: h, width: w, borderRadius: 6, background: "linear-gradient(90deg,#1e2d4a 25%,#2a3a5c 50%,#1e2d4a 75%)", backgroundSize: "200% 100%", animation: "shimmer 1.5s infinite" }} />;
+}
+
+// ─── Stage bar ────────────────────────────────────────────────────────────────
+
+function StageBar({ label, count, max, color }: { label: string; count: number; max: number; color: string }) {
   return (
     <div style={{ marginBottom: 12 }}>
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          marginBottom: 5,
-          alignItems: 'center',
-        }}
-      >
-        <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{label}</span>
-        <span style={{ fontSize: 13, fontWeight: 700, color }}>
-          {value}
-          {suffix}
-        </span>
+      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5 }}>
+        <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>{label}</span>
+        <span style={{ fontSize: 12, fontWeight: 700, color }}>{count}</span>
       </div>
-      <div
-        style={{
-          height: 6,
-          background: 'var(--bg-secondary)',
-          borderRadius: 99,
-          overflow: 'hidden',
-        }}
-      >
-        <div
-          style={{
-            height: '100%',
-            width: `${pct}%`,
-            background: color,
-            borderRadius: 99,
-            transition: 'width 0.6s ease',
-          }}
-        />
+      <div style={{ height: 5, background: "var(--bg-secondary)", borderRadius: 99, overflow: "hidden" }}>
+        <div style={{ height: "100%", width: `${Math.round((count / max) * 100)}%`, background: color, borderRadius: 99, transition: "width .6s ease" }} />
       </div>
     </div>
+  );
+}
+
+// ─── Chip ─────────────────────────────────────────────────────────────────────
+
+function Chip({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
+  return (
+    <button onClick={onClick} style={{
+      padding: "5px 14px", borderRadius: 99, fontSize: 12, cursor: "pointer", border: "1px solid",
+      borderColor: active ? "var(--accent-purple)" : "var(--border-color)",
+      background: active ? "#6366f120" : "transparent",
+      color: active ? "var(--text-primary)" : "var(--text-secondary)",
+      transition: "all .15s",
+    }}>{label}</button>
   );
 }
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function DashboardPage() {
+  const [data, setData] = useState<Summary | null>(null);
+  const [pipelines, setPipelines] = useState<Pipeline[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [period, setPeriod] = useState(90);
+  const [pipeline, setPipelineFilter] = useState("");
+
+  const load = useCallback(async (days: number, pipe: string) => {
+    setLoading(true);
+    try {
+      const end = new Date();
+      const start = daysFromNow(end, days);
+      const params = new URLSearchParams({ start: toISO(start), end: toISO(end), pipeline: pipe });
+      const r = await fetch("/api/deals?" + params);
+      setData(await r.json());
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetch("/api/pipelines").then(r => r.json()).then(setPipelines).catch(() => {});
+    load(period, pipeline);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handlePeriod = (days: number) => { setPeriod(days); load(days, pipeline); };
+  const handlePipeline = (pipe: string) => { setPipelineFilter(pipe); load(period, pipe); };
+
+  // Derived chart data
+  const months = data ? Object.entries(data.byMonth).map(([k, v]) => {
+    const [y, m] = k.split("-");
+    const label = new Date(+y, +m - 1).toLocaleDateString("pt-BR", { month: "short", year: "2-digit" });
+    return { label, ...v };
+  }) : [];
+
+  const donutData = data ? [
+    { name: "Ganhos", value: data.won, fill: "#22c55e" },
+    { name: "Perdidos", value: data.lost, fill: "#ef4444" },
+    { name: "Em Aberto", value: data.open, fill: "#f97316" },
+  ] : [];
+
+  const topStages = data
+    ? Array.from(data.openDeals.reduce((acc, d) => {
+        acc.set(d.stage, (acc.get(d.stage) || 0) + 1);
+        return acc;
+      }, new Map<string, number>())).map(([s, c]) => ({ stage: s, count: c })).sort((a, b) => b.count - a.count)
+    : [];
+  const maxStage = topStages[0]?.count || 1;
+
+  const stageColors = ["#3b82f6", "#6366f1", "#f97316", "#22d3ee", "#eab308", "#22c55e"];
+
+  const revenueArea = months.map(m => ({ label: m.label, receita: m.amount }));
+
+  const lossMax = data?.lossReasons[0]?.[1] || 1;
+
+  const today = new Date();
+
   return (
-    <div
-      style={{
-        minHeight: '100vh',
-        background: 'var(--bg-primary)',
-        padding: '32px 36px',
-        color: 'var(--text-primary)',
-      }}
-    >
+    <div style={{ color: "var(--text-primary)" }}>
+      <style>{`@keyframes shimmer{0%{background-position:200%}100%{background-position:-200%}}`}</style>
+
       {/* ── Header ── */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          marginBottom: 32,
-        }}
-      >
-        <h1 style={{ fontSize: 28, fontWeight: 800, color: 'var(--text-primary)' }}>
-          Visão Geral
-        </h1>
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8,
-            background: 'var(--bg-card)',
-            border: '1px solid var(--border-color)',
-            borderRadius: 20,
-            padding: '7px 16px',
-          }}
-        >
-          <span
-            style={{
-              width: 8,
-              height: 8,
-              borderRadius: '50%',
-              background: 'var(--color-green)',
-              display: 'inline-block',
-              boxShadow: '0 0 8px var(--color-green)',
-              flexShrink: 0,
-            }}
-          />
-          <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-green)' }}>
-            Sistema Operacional: Online
-          </span>
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 20, flexWrap: "wrap", gap: 12 }}>
+        <div>
+          <h1 style={{ fontSize: 22, fontWeight: 800 }}>Pipeline Intelligence</h1>
+          <p style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 3 }}>Visão executiva do funil comercial</p>
         </div>
+        <button
+          onClick={() => load(period, pipeline)}
+          style={{ display: "flex", alignItems: "center", gap: 7, padding: "8px 16px", borderRadius: 8, border: "1px solid var(--border-color)", background: "var(--bg-card)", color: "var(--text-secondary)", fontSize: 13, cursor: "pointer" }}
+        >
+          <RefreshCw size={14} />
+          Atualizar
+        </button>
       </div>
 
-      {/* ── KPI Grid (4 cols × 2 rows) ── */}
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(4, 1fr)',
-          gap: 16,
-          marginBottom: 28,
-        }}
-      >
-        {kpiCards.map((card) => (
-          <KpiCardComponent key={card.label} card={card} />
-        ))}
-      </div>
-
-      {/* ── Pipeline + Channel Row ── */}
-      <div style={{ display: 'flex', gap: 20, marginBottom: 24 }}>
-        {/* Pipeline Status */}
-        <SectionCard title="Status do Pipeline Atual">
-          {pipelineStages.map((stage) => (
-            <HorizontalBar
-              key={stage.name}
-              label={stage.name}
-              value={stage.count}
-              maxValue={stage.max}
-              color={stage.color}
-            />
+      {/* ── Filters ── */}
+      <div style={{ background: "var(--bg-card)", border: "1px solid var(--border-color)", borderRadius: 10, padding: "12px 16px", marginBottom: 20, display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+        <span style={{ fontSize: 12, color: "var(--text-muted)" }}>Período:</span>
+        <div style={{ display: "flex", gap: 6 }}>
+          {[30, 90, 180, 365].map(d => (
+            <Chip key={d} label={d === 365 ? "1 ano" : d === 180 ? "6 meses" : `${d} dias`} active={period === d} onClick={() => handlePeriod(d)} />
           ))}
-        </SectionCard>
-
-        {/* Channel Conversion */}
-        <SectionCard title="Conversão por Canal">
-          {channelConversions.map((ch) => (
-            <HorizontalBar
-              key={ch.name}
-              label={ch.name}
-              value={ch.pct}
-              maxValue={20}
-              color={ch.color}
-              suffix="%"
-            />
-          ))}
-        </SectionCard>
+        </div>
+        <select
+          value={pipeline}
+          onChange={e => handlePipeline(e.target.value)}
+          style={{ marginLeft: "auto", background: "var(--bg-secondary)", border: "1px solid var(--border-color)", color: "var(--text-primary)", borderRadius: 7, padding: "6px 10px", fontSize: 13 }}
+        >
+          <option value="">Todos os pipelines</option>
+          {pipelines.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
+        </select>
       </div>
 
-      {/* ── Losts + Gap Row ── */}
-      <div style={{ display: 'flex', gap: 20 }}>
-        {/* Lost Deals */}
-        <SectionCard title="Últimos Losts Relevantes">
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {lostDeals.map((deal) => (
-              <div
-                key={deal.company}
-                style={{
-                  background: 'var(--bg-secondary)',
-                  border: '1px solid var(--border-color)',
-                  borderRadius: 8,
-                  padding: '12px 14px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  gap: 12,
-                }}
-              >
-                <div>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>
-                    {deal.company}
-                  </div>
-                  <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
-                    {deal.contact}
-                  </div>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-                  <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Motivo:</span>
-                  <span
-                    style={{
-                      fontSize: 11,
-                      fontWeight: 700,
-                      color: deal.badgeColor,
-                      background: `${deal.badgeColor}22`,
-                      border: `1px solid ${deal.badgeColor}55`,
-                      borderRadius: 6,
-                      padding: '3px 8px',
-                    }}
-                  >
-                    {deal.reason}
-                  </span>
-                </div>
-              </div>
-            ))}
-
-            {/* IA Insight Box */}
-            <div
-              style={{
-                background: '#92400e22',
-                border: '1px solid #d9770655',
-                borderRadius: 10,
-                padding: '14px 16px',
-                marginTop: 4,
-              }}
-            >
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'flex-start',
-                  gap: 10,
-                  marginBottom: 12,
-                }}
-              >
-                <span
-                  style={{
-                    fontSize: 18,
-                    lineHeight: 1,
-                    marginTop: 1,
-                    flexShrink: 0,
-                  }}
-                >
-                  💡
-                </span>
-                <p style={{ fontSize: 13, color: '#fbbf24', lineHeight: 1.55 }}>
-                  O vendedor <strong>Lucas BH</strong> ganhou uma venda recente quebrando a mesma
-                  objeção (<strong>Budget/Preço Alto</strong>).
-                </p>
-              </div>
-              <button
-                style={{
-                  background: '#d9770620',
-                  border: '1px solid #d97706aa',
-                  borderRadius: 7,
-                  padding: '8px 14px',
-                  fontSize: 12,
-                  fontWeight: 700,
-                  color: '#fbbf24',
-                  cursor: 'pointer',
-                  width: '100%',
-                  letterSpacing: '0.02em',
-                  transition: 'background 0.15s',
-                }}
-              >
-                Escutar Call e Ver Insights
-              </button>
-            </div>
+      {/* ── KPIs ── */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))", gap: 12, marginBottom: 20 }}>
+        {loading ? Array.from({ length: 6 }).map((_, i) => (
+          <div key={i} style={{ background: "var(--bg-card)", border: "1px solid var(--border-color)", borderRadius: 12, padding: "20px 22px" }}>
+            <Skeleton h={10} w="60%" /><div style={{ marginTop: 12 }}><Skeleton h={28} w="70%" /></div>
           </div>
-        </SectionCard>
+        )) : data ? <>
+          <KpiCard label="Total de Deals" value={String(data.total)} sub="no período" color="var(--text-primary)" icon={<Activity size={16} />} />
+          <KpiCard label="Ganhos" value={String(data.won)} sub={BRL(data.wonAmount)} color="var(--color-green)" icon={<TrendingUp size={16} />} />
+          <KpiCard label="Perdidos" value={String(data.lost)} sub={data.total ? `${Math.round(data.lost / data.total * 100)}% do total` : "—"} color="var(--color-red)" icon={<TrendingDown size={16} />} />
+          <KpiCard label="Em Aberto" value={String(data.open)} sub="deals ativos" color="var(--color-orange)" icon={<AlertCircle size={16} />} />
+          <KpiCard label="Conversão" value={`${data.conversionRate}%`} sub="ganhos / criados" color="var(--accent-blue)" icon={<Target size={16} />} />
+          <KpiCard label="Receita Ganha" value={BRL(data.wonAmount)} sub="no período" color="var(--color-green)" icon={<DollarSign size={16} />} />
+        </> : null}
+      </div>
 
-        {/* Gap de Vendas vs Produtividade */}
-        <SectionCard title="Gap de Vendas vs Produtividade">
-          {/* Subtitle warning */}
-          <p
-            style={{
-              fontSize: 11,
-              color: 'var(--color-orange)',
-              fontWeight: 700,
-              letterSpacing: '0.05em',
-              textTransform: 'uppercase',
-              marginBottom: 18,
-              marginTop: -8,
-            }}
-          >
-            Atenção ao Volume de Atividades
-          </p>
+      {/* ── Row 1: Bar chart + Donut ── */}
+      <div style={{ display: "grid", gridTemplateColumns: "3fr 2fr", gap: 16, marginBottom: 16 }}>
+        <Card title="Volume por Mês" sub="Deals criados por mês no período (ganhos / perdidos / em aberto)">
+          <div style={{ display: "flex", gap: 16, marginBottom: 12 }}>
+            {[["Ganhos", "#22c55e"], ["Perdidos", "#ef4444"], ["Em Aberto", "#f97316"]].map(([l, c]) => (
+              <span key={l} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: "var(--text-muted)" }}>
+                <span style={{ width: 8, height: 8, borderRadius: 2, background: c, display: "inline-block" }} />{l}
+              </span>
+            ))}
+          </div>
+          {loading ? <Skeleton h={220} w="100%" /> : (
+            <ResponsiveContainer width="100%" height={220}>
+              <BarChart data={months} {...chartTooltipStyle}>
+                <XAxis dataKey="label" tick={{ fill: "#64748b", fontSize: 11 }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fill: "#64748b", fontSize: 11 }} axisLine={false} tickLine={false} />
+                <Tooltip {...chartTooltipStyle} />
+                <Bar dataKey="won" name="Ganhos" stackId="a" fill="#22c55e" radius={[0, 0, 0, 0]} />
+                <Bar dataKey="lost" name="Perdidos" stackId="a" fill="#ef4444" />
+                <Bar dataKey="open" name="Em Aberto" stackId="a" fill="#f97316" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </Card>
 
-          {/* Recharts horizontal bar chart — days without close */}
-          <ResponsiveContainer width="100%" height={160}>
-            <BarChart
-              data={gapSellers.map((s) => ({ name: s.name, dias: s.days, color: s.barColor }))}
-              layout="vertical"
-              margin={{ top: 0, right: 20, bottom: 0, left: 60 }}
-              barSize={12}
-            >
-              <XAxis type="number" hide />
-              <YAxis
-                type="category"
-                dataKey="name"
-                tick={{ fill: '#94a3b8', fontSize: 12 }}
-                axisLine={false}
-                tickLine={false}
-                width={60}
-              />
-              <Tooltip
-                cursor={{ fill: '#ffffff08' }}
-                contentStyle={{
-                  background: '#111827',
-                  border: '1px solid #1e2d4a',
-                  borderRadius: 8,
-                  fontSize: 12,
-                  color: '#e2e8f0',
-                }}
-                formatter={(value) => [`${value} dias sem fechar`, '']}
-              />
-              <Bar dataKey="dias" radius={[0, 6, 6, 0]}>
-                {gapSellers.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={entry.barColor} />
+        <Card title="Distribuição" sub="Status dos deals no período">
+          {loading ? <Skeleton h={220} w="100%" /> : data && (
+            <>
+              <ResponsiveContainer width="100%" height={180}>
+                <PieChart>
+                  <Pie data={donutData} cx="50%" cy="50%" innerRadius={55} outerRadius={80} dataKey="value" paddingAngle={3}>
+                    {donutData.map((d, i) => <Cell key={i} fill={d.fill} />)}
+                  </Pie>
+                  <Tooltip contentStyle={chartTooltipStyle.contentStyle} />
+                </PieChart>
+              </ResponsiveContainer>
+              <div style={{ display: "flex", justifyContent: "center", gap: 14, flexWrap: "wrap", marginTop: 8 }}>
+                {donutData.map(d => (
+                  <span key={d.name} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, color: "var(--text-secondary)" }}>
+                    <span style={{ width: 8, height: 8, borderRadius: 2, background: d.fill, display: "inline-block" }} />
+                    {d.name}: <strong style={{ color: d.fill }}>{d.value}</strong>
+                  </span>
                 ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-
-          {/* Detail rows */}
-          <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {gapSellers.map((seller) => (
-              <div
-                key={seller.name}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  background: 'var(--bg-secondary)',
-                  borderRadius: 7,
-                  padding: '8px 12px',
-                  border: `1px solid ${seller.barColor}30`,
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span
-                    style={{
-                      width: 8,
-                      height: 8,
-                      borderRadius: '50%',
-                      background: seller.barColor,
-                      flexShrink: 0,
-                      boxShadow: `0 0 4px ${seller.barColor}`,
-                    }}
-                  />
-                  <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-                    {seller.name}
-                  </span>
-                </div>
-                <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-                  <span style={{ fontSize: 13, fontWeight: 700, color: seller.textColor }}>
-                    {seller.days} dia{seller.days !== 1 ? 's' : ''}
-                  </span>
-                  <span
-                    style={{
-                      fontSize: 11,
-                      color: 'var(--text-muted)',
-                      background: 'var(--bg-card)',
-                      borderRadius: 5,
-                      padding: '2px 8px',
-                      border: '1px solid var(--border-color)',
-                    }}
-                  >
-                    {seller.calls} calls
-                  </span>
-                </div>
               </div>
-            ))}
-          </div>
+            </>
+          )}
+        </Card>
+      </div>
 
-          <p
-            style={{
-              fontSize: 11,
-              color: 'var(--text-muted)',
-              marginTop: 14,
-              fontStyle: 'italic',
-              lineHeight: 1.55,
-            }}
-          >
-            * O vendedor com maior tempo sem fechar é também o que tem menor volume de reuniões.
-          </p>
-        </SectionCard>
+      {/* ── Row 2: Funil + Top Deals ── */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
+        <Card title="Funil por Estágio" sub="Deals em aberto por estágio atual">
+          {loading ? <Skeleton h={200} w="100%" /> : topStages.map((s, i) => (
+            <StageBar key={s.stage} label={s.stage} count={s.count} max={maxStage} color={stageColors[i % stageColors.length]} />
+          ))}
+        </Card>
+
+        <Card title="Top Deals em Aberto" sub="Ordenados por probabilidade de fechamento">
+          {loading ? <Skeleton h={200} w="100%" /> : data && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {data.openDeals.slice(0, 8).map(d => {
+                const p = d.probability ?? 0;
+                const color = p >= 70 ? "#22c55e" : p >= 40 ? "#f97316" : "#ef4444";
+                const isOverdue = d.closeDate && new Date(d.closeDate) < today;
+                return (
+                  <div key={d.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 10px", background: "var(--bg-secondary)", borderRadius: 8, border: "1px solid var(--border-color)" }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 12, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.name}</div>
+                      <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 1 }}>{d.stage}</div>
+                    </div>
+                    <div style={{ fontSize: 11, color: "var(--text-muted)", flexShrink: 0 }}>{BRL(d.amount)}</div>
+                    <div style={{ textAlign: "right", flexShrink: 0 }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, color }}>{p}%</div>
+                      <div style={{ fontSize: 10, color: isOverdue ? "#ef4444" : "var(--text-muted)" }}>{fmtDate(d.closeDate)}{isOverdue ? " ⚠" : ""}</div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </Card>
+      </div>
+
+      {/* ── Row 3: Loss reasons + Revenue trend ── */}
+      <div style={{ display: "grid", gridTemplateColumns: "55fr 45fr", gap: 16 }}>
+        <Card title="Motivos de Perda" sub="Ranking por frequência">
+          {loading ? <Skeleton h={200} w="100%" /> : data && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {data.lossReasons.map(([label, count]) => (
+                <div key={label} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <span style={{ fontSize: 12, color: "var(--text-secondary)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</span>
+                  <div style={{ width: 100, height: 4, background: "var(--bg-secondary)", borderRadius: 2, flexShrink: 0 }}>
+                    <div style={{ height: "100%", width: `${Math.round((count / lossMax) * 100)}%`, background: "#ef4444", borderRadius: 2, opacity: 0.8 }} />
+                  </div>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: "#ef4444", minWidth: 24, textAlign: "right" }}>{count}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+
+        <Card title="Tendência de Receita" sub="Receita ganha por mês (R$)">
+          {loading ? <Skeleton h={200} w="100%" /> : (
+            <ResponsiveContainer width="100%" height={200}>
+              <AreaChart data={revenueArea} {...chartTooltipStyle}>
+                <defs>
+                  <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#22c55e" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="#22c55e" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid stroke="#1e2d4a" strokeDasharray="3 3" />
+                <XAxis dataKey="label" tick={{ fill: "#64748b", fontSize: 11 }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fill: "#64748b", fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={v => `${(v / 1000).toFixed(0)}k`} />
+                <Tooltip {...chartTooltipStyle} formatter={(v: number) => [BRL(v), "Receita"]} />
+                <Area type="monotone" dataKey="receita" stroke="#22c55e" strokeWidth={2} fill="url(#areaGrad)" />
+              </AreaChart>
+            </ResponsiveContainer>
+          )}
+        </Card>
       </div>
     </div>
   );
