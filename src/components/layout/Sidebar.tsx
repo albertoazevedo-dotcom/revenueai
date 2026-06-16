@@ -8,12 +8,16 @@ import {
   Bot,
   BookOpen,
   ChevronRight,
+  PieChart,
+  AlertTriangle,
 } from "lucide-react";
 
 const nav = [
-  { href: "/crm", label: "CRM Integrado", icon: Users },
-  { href: "/enablement", label: "Enablement (Audit)", icon: ShieldCheck },
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/pipeline", label: "Pipeline", icon: PieChart },
+  { href: "/perdas", label: "Perdas", icon: AlertTriangle },
+  { href: "/crm", label: "CRM", icon: Users },
+  { href: "/enablement", label: "Enablement", icon: ShieldCheck },
   { href: "/agentes-ia", label: "Agentes IA", icon: Bot },
 ];
 
