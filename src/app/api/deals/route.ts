@@ -1,77 +1,101 @@
-const byMonth = [
-  { month: 'Jan', ganhos: 3, perdidos: 7, aberto: 12, wonAmount: 87500 },
-  { month: 'Fev', ganhos: 4, perdidos: 6, aberto: 14, wonAmount: 112000 },
-  { month: 'Mar', ganhos: 5, perdidos: 8, aberto: 11, wonAmount: 145000 },
-  { month: 'Abr', ganhos: 3, perdidos: 9, aberto: 15, wonAmount: 78000 },
-  { month: 'Mai', ganhos: 6, perdidos: 7, aberto: 10, wonAmount: 198000 },
-  { month: 'Jun', ganhos: 4, perdidos: 6, aberto: 13, wonAmount: 123000 },
-  { month: 'Jul', ganhos: 5, perdidos: 8, aberto: 9, wonAmount: 165000 },
-  { month: 'Ago', ganhos: 3, perdidos: 7, aberto: 14, wonAmount: 92000 },
-  { month: 'Set', ganhos: 4, perdidos: 9, aberto: 11, wonAmount: 134000 },
-  { month: 'Out', ganhos: 2, perdidos: 8, aberto: 16, wonAmount: 58000 },
-  { month: 'Nov', ganhos: 3, perdidos: 7, aberto: 10, wonAmount: 98000 },
-  { month: 'Dez', ganhos: 2, perdidos: 7, aberto: 12, wonAmount: 110000 },
+import { NextResponse } from "next/server";
+
+// ─── Mock open deals ────────────────────────────────────────────────────────
+const OPEN_DEALS = [
+  { id: "1", name: "Grupo Votorantim — BI Analytics", amount: 148000, stage: "Em Negociação", closeDate: "2025-07-15", probability: 80, pipeline: "default" },
+  { id: "2", name: "Itaú Unibanco — CRM Enterprise", amount: 220000, stage: "Em Negociação", closeDate: "2025-07-30", probability: 75, pipeline: "enterprise" },
+  { id: "3", name: "Ambev — Revenue Operations", amount: 95000, stage: "Proposta Enviada", closeDate: "2025-08-10", probability: 65, pipeline: "default" },
+  { id: "4", name: "Totvs — Sales Intelligence", amount: 62000, stage: "Proposta Enviada", closeDate: "2025-07-22", probability: 60, pipeline: "default" },
+  { id: "5", name: "Magazine Luiza — Automação Comercial", amount: 38000, stage: "Demo Agendada", closeDate: "2025-08-05", probability: 45, pipeline: "default" },
+  { id: "6", name: "Localiza — Pipeline Analytics", amount: 44000, stage: "Proposta Enviada", closeDate: "2025-07-18", probability: 55, pipeline: "default" },
+  { id: "7", name: "Natura &Co — Forecast IA", amount: 88000, stage: "Em Negociação", closeDate: "2025-08-20", probability: 70, pipeline: "default" },
+  { id: "8", name: "WEG Industries — CRM Integrado", amount: 110000, stage: "Em Negociação", closeDate: "2025-09-01", probability: 72, pipeline: "enterprise" },
+  { id: "9", name: "Raia Drogasil — Revenue Dashboard", amount: 29000, stage: "Demo Agendada", closeDate: "2025-07-25", probability: 35, pipeline: "default" },
+  { id: "10", name: "Vale S.A. — Sales Enablement", amount: 175000, stage: "POC / Piloto", closeDate: "2025-09-15", probability: 68, pipeline: "enterprise" },
+  { id: "11", name: "Embraer — Forecast Engine", amount: 135000, stage: "Proposta", closeDate: "2025-08-30", probability: 58, pipeline: "enterprise" },
+  { id: "12", name: "JBS — Pipeline Control", amount: 55000, stage: "Qualificação", closeDate: "2025-10-01", probability: 20, pipeline: "default" },
+  { id: "13", name: "Bradesco Seguros — Analytics", amount: 42000, stage: "Demo Agendada", closeDate: "2025-07-28", probability: 40, pipeline: "default" },
+  { id: "14", name: "Porto Seguro — CRM Suite", amount: 68000, stage: "Proposta Enviada", closeDate: "2025-08-12", probability: 50, pipeline: "default" },
+  { id: "15", name: "Gerdau — Revenue Ops", amount: 92000, stage: "Em Negociação", closeDate: "2025-08-08", probability: 78, pipeline: "default" },
+  { id: "16", name: "Positivo Tecnologia — BI", amount: 18000, stage: "Qualificação", closeDate: "2025-10-15", probability: 15, pipeline: "default" },
+  { id: "17", name: "Movida — Sales Analytics", amount: 33000, stage: "Demo Agendada", closeDate: "2025-08-01", probability: 38, pipeline: "default" },
+  { id: "18", name: "SulAmérica — Forecast IA", amount: 76000, stage: "Em Negociação", closeDate: "2025-07-20", probability: 82, pipeline: "enterprise" },
+  { id: "19", name: "Arezzo — CRM Commerce", amount: 24000, stage: "Qualificação", closeDate: "2025-09-20", probability: 12, pipeline: "default" },
+  { id: "20", name: "Eneva — Pipeline Suite", amount: 145000, stage: "Proposta", closeDate: "2025-08-25", probability: 63, pipeline: "enterprise" },
+  { id: "21", name: "Cosan — Sales Intelligence", amount: 87000, stage: "Em Negociação", closeDate: "2025-07-31", probability: 73, pipeline: "default" },
+  { id: "22", name: "3tentos — Revenue Analytics", amount: 31000, stage: "Demo Agendada", closeDate: "2025-08-18", probability: 42, pipeline: "default" },
+  { id: "23", name: "Dasa — CRM Clínico Comercial", amount: 58000, stage: "Proposta Enviada", closeDate: "2025-07-26", probability: 55, pipeline: "default" },
+  { id: "24", name: "Raízen — Revenue Operations", amount: 198000, stage: "POC / Piloto", closeDate: "2025-10-10", probability: 60, pipeline: "enterprise" },
+  { id: "25", name: "Fleury — Sales Dashboard", amount: 41000, stage: "Demo Agendada", closeDate: "2025-08-14", probability: 30, pipeline: "default" },
 ];
 
-const openDeals = [
-  { id: '1', name: 'Expansão ERP - Módulo Financeiro', company: 'Grupo Votorantim', stage: 'negociacao', amount: 148000, probability: 75, closeDate: '2025-03-31' },
-  { id: '2', name: 'Plataforma BI Corporativo', company: 'Itaú Unibanco S.A.', stage: 'proposta', amount: 120000, probability: 60, closeDate: '2025-02-28' },
-  { id: '3', name: 'Sistema de Gestão de Frotas', company: 'JSL Logística', stage: 'demo', amount: 85000, probability: 45, closeDate: '2025-04-15' },
-  { id: '4', name: 'CRM Enterprise Licenças', company: 'Natura &Co', stage: 'fechamento', amount: 95000, probability: 88, closeDate: '2025-01-31' },
-  { id: '5', name: 'Automação de Marketing B2B', company: 'Embraer S.A.', stage: 'proposta', amount: 67000, probability: 55, closeDate: '2025-03-15' },
-  { id: '6', name: 'Integração SAP + Salesforce', company: 'WEG Equipamentos', stage: 'negociacao', amount: 112000, probability: 70, closeDate: '2025-02-14' },
-  { id: '7', name: 'Plataforma de RH Digital', company: 'Ambev Brasil', stage: 'qualificacao', amount: 43000, probability: 25, closeDate: '2025-05-30' },
-  { id: '8', name: 'Segurança Cibernética Enterprise', company: 'Bradesco Seguros', stage: 'demo', amount: 78000, probability: 40, closeDate: '2025-04-01' },
-  { id: '9', name: 'Data Lake & Analytics', company: 'Petrobras Distribuidora', stage: 'proposta', amount: 135000, probability: 65, closeDate: '2025-03-20' },
-  { id: '10', name: 'ERP Cloud Migration', company: 'Marfrig Global Foods', stage: 'negociacao', amount: 99000, probability: 72, closeDate: '2025-02-28' },
-  { id: '11', name: 'Plataforma de E-commerce B2B', company: 'Magazine Luiza Corp', stage: 'fechamento', amount: 55000, probability: 85, closeDate: '2025-01-25' },
-  { id: '12', name: 'Sistema de Controle de Qualidade', company: 'Gerdau Metalúrgica', stage: 'demo', amount: 38000, probability: 35, closeDate: '2025-05-10' },
-  { id: '13', name: 'BI Operacional - Linha de Produção', company: 'Braskem Petroquímica', stage: 'proposta', amount: 72000, probability: 58, closeDate: '2025-03-31' },
-  { id: '14', name: 'Gestão de Contratos Digitais', company: 'Engie Brasil Energia', stage: 'qualificacao', amount: 29000, probability: 20, closeDate: '2025-06-15' },
-  { id: '15', name: 'Plataforma de Treinamento Corporativo', company: 'Totvs S.A.', stage: 'negociacao', amount: 47000, probability: 68, closeDate: '2025-02-20' },
-  { id: '16', name: 'Integração Marketplace + WMS', company: 'Via Varejo Multicanal', stage: 'proposta', amount: 63000, probability: 50, closeDate: '2025-04-30' },
-  { id: '17', name: 'Automação de Processos RPA', company: 'Localfrio Logística', stage: 'demo', amount: 31000, probability: 30, closeDate: '2025-05-20' },
-  { id: '18', name: 'Customer Success Platform', company: 'Nubank Enterprise', stage: 'fechamento', amount: 88000, probability: 90, closeDate: '2025-01-20' },
-  { id: '19', name: 'Solução de Compliance Fiscal', company: 'XP Investimentos', stage: 'negociacao', amount: 74000, probability: 62, closeDate: '2025-03-10' },
-  { id: '20', name: 'Portal do Fornecedor Digital', company: 'Suzano Papel e Celulose', stage: 'proposta', amount: 42000, probability: 45, closeDate: '2025-04-25' },
-  { id: '21', name: 'Plataforma de Compras Eletrônicas', company: 'Cosan Combustíveis', stage: 'qualificacao', amount: 36000, probability: 15, closeDate: '2025-07-01' },
-  { id: '22', name: 'Sistema de Manutenção Preditiva', company: 'Tupy Fundições', stage: 'demo', amount: 58000, probability: 38, closeDate: '2025-05-05' },
-  { id: '23', name: 'Gestão de Ativos Digitais', company: 'Localiza Hertz', stage: 'negociacao', amount: 82000, probability: 76, closeDate: '2025-02-10' },
-  { id: '24', name: 'Plataforma Omnichannel', company: 'Lojas Renner S.A.', stage: 'proposta', amount: 51000, probability: 52, closeDate: '2025-03-28' },
-  { id: '25', name: 'Consultoria Transformação Digital', company: 'Oi Telefonia Corp', stage: 'qualificacao', amount: 24000, probability: 10, closeDate: '2025-08-15' },
-  { id: '26', name: 'Analytics Preditivo de Vendas', company: 'Havaianas Internacional', stage: 'demo', amount: 45000, probability: 42, closeDate: '2025-04-18' },
-  { id: '27', name: 'ERP Módulo Supply Chain', company: 'BRF Foods Global', stage: 'fechamento', amount: 103000, probability: 82, closeDate: '2025-01-30' },
+const LOSS_REASONS: [string, number][] = [
+  ["Budget / Preço Alto", 28],
+  ["Perdeu para Concorrente", 21],
+  ["Sem necessidade no momento", 16],
+  ["Timing ruim", 11],
+  ["Falta de aprovação interna", 9],
+  ["Produto não atende requisito", 6],
+  ["Sem resposta do prospect", 5],
 ];
 
-const lossReasons = [
-  { reason: 'Budget/Preço Alto', count: 28 },
-  { reason: 'Perdeu para Concorrente', count: 22 },
-  { reason: 'Sem necessidade no momento', count: 14 },
-  { reason: 'Timing ruim', count: 11 },
-  { reason: 'Falta de aprovação interna', count: 8 },
-  { reason: 'Produto não atende', count: 4 },
-  { reason: 'Sem resposta', count: 2 },
-];
+function buildByMonth(start: Date, end: Date) {
+  const byMonth: Record<string, { total: number; won: number; lost: number; open: number; amount: number }> = {};
+  const seed = [
+    { won: 3, lost: 7, open: 8, amount: 92000 },
+    { won: 4, lost: 8, open: 9, amount: 124000 },
+    { won: 3, lost: 6, open: 7, amount: 88000 },
+    { won: 5, lost: 9, open: 10, amount: 168000 },
+    { won: 4, lost: 7, open: 9, amount: 142000 },
+    { won: 6, lost: 8, open: 11, amount: 195000 },
+    { won: 5, lost: 9, open: 8, amount: 158000 },
+    { won: 7, lost: 7, open: 12, amount: 224000 },
+    { won: 4, lost: 8, open: 9, amount: 136000 },
+    { won: 6, lost: 10, open: 10, amount: 187000 },
+    { won: 5, lost: 9, open: 11, amount: 162000 },
+    { won: 7, lost: 8, open: 13, amount: 218000 },
+  ];
+  const cur = new Date(start.getFullYear(), start.getMonth(), 1);
+  let idx = 0;
+  while (cur <= end && idx < seed.length) {
+    const key = `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, "0")}`;
+    const s = seed[idx % seed.length];
+    byMonth[key] = { total: s.won + s.lost + s.open, ...s };
+    cur.setMonth(cur.getMonth() + 1);
+    idx++;
+  }
+  return byMonth;
+}
 
-export async function GET() {
-  const totalWon = byMonth.reduce((s, m) => s + m.ganhos, 0);
-  const totalLost = byMonth.reduce((s, m) => s + m.perdidos, 0);
-  const totalOpen = openDeals.length;
-  const totalDeals = totalWon + totalLost + totalOpen;
-  const wonAmount = byMonth.reduce((s, m) => s + m.wonAmount, 0);
-  const conversionRate = +((totalWon / (totalWon + totalLost)) * 100).toFixed(1);
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const startParam = searchParams.get("start");
+  const endParam = searchParams.get("end");
 
-  return Response.json({
-    summary: {
-      totalDeals,
-      won: totalWon,
-      lost: totalLost,
-      open: totalOpen,
-      wonAmount,
-      conversionRate,
-    },
+  const end = endParam ? new Date(endParam) : new Date();
+  const start = startParam ? new Date(startParam) : new Date(end.getTime() - 90 * 24 * 60 * 60 * 1000);
+
+  const byMonth = buildByMonth(start, end);
+  const months = Object.values(byMonth);
+
+  const won = months.reduce((s, m) => s + m.won, 0);
+  const lost = months.reduce((s, m) => s + m.lost, 0);
+  const open = OPEN_DEALS.length;
+  const total = won + lost + open;
+  const wonAmount = months.reduce((s, m) => s + m.amount, 0);
+
+  const openDeals = [...OPEN_DEALS].sort((a, b) => (b.probability ?? 0) - (a.probability ?? 0));
+
+  return NextResponse.json({
+    total,
+    won,
+    lost,
+    open,
+    conversionRate: total ? Math.round((won / total) * 1000) / 10 : 0,
+    totalAmount: wonAmount * 1.6,
+    wonAmount,
     byMonth,
+    lossReasons: LOSS_REASONS,
     openDeals,
-    lossReasons,
   });
 }

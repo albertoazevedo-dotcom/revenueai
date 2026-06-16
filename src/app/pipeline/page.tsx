@@ -1,158 +1,151 @@
-'use client';
+"use client";
 
-import { useEffect, useState } from 'react';
-import { Search } from 'lucide-react';
+import { useEffect, useState } from "react";
+import { Search } from "lucide-react";
 
-interface Deal {
-  id: string; name: string; company: string; stage: string;
-  amount: number; probability: number; closeDate: string;
+interface OpenDeal {
+  id: string; name: string; amount: number; stage: string;
+  closeDate: string | null; probability: number | null; pipeline: string;
 }
-interface DealsData { openDeals: Deal[]; }
 
-const brl = (v: number) =>
-  new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
-const fmtDate = (s: string) => { const [y,m,d] = s.split('-'); return `${d}/${m}/${y}`; };
+const BRL = (v: number) =>
+  new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 }).format(v);
 
-const STAGE_LABELS: Record<string, string> = {
-  qualificacao: 'Qualificação', demo: 'Demo Agendada', proposta: 'Proposta Enviada',
-  negociacao: 'Em Negociação', fechamento: 'Fechamento', ganho: 'Ganho', perdido: 'Perdido',
+const fmtDate = (s: string | null) => {
+  if (!s) return "—";
+  try { return new Date(s).toLocaleDateString("pt-BR"); } catch { return s; }
 };
 
-type SortKey = 'name' | 'amount' | 'probability' | 'closeDate';
-
-function StatusBadge({ probability }: { probability: number }) {
-  const hot = probability >= 70;
-  const mid = probability >= 40;
-  const color = hot ? '#22c55e' : mid ? '#f97316' : '#60a5fa';
-  const label = hot ? 'Quente' : mid ? 'Médio' : 'Frio';
-  return (
-    <span style={{ fontSize: 11, fontWeight: 700, color, background: `${color}18`, border: `1px solid ${color}44`, borderRadius: 6, padding: '3px 10px' }}>
-      {label}
-    </span>
-  );
+function Badge({ p }: { p: number | null }) {
+  if (p === null) return <span style={{ fontSize: 10, fontWeight: 700, padding: "3px 9px", borderRadius: 99, background: "#1e2d4a", color: "#64748b" }}>—</span>;
+  const [bg, color, label] =
+    p >= 70 ? ["#14532d", "#22c55e", "Quente"] :
+    p >= 40 ? ["#431407", "#f97316", "Médio"] :
+               ["#450a0a", "#ef4444", "Frio"];
+  return <span style={{ fontSize: 10, fontWeight: 700, padding: "3px 9px", borderRadius: 99, background: bg, color }}>{label}</span>;
 }
 
 export default function PipelinePage() {
-  const [deals, setDeals] = useState<Deal[]>([]);
+  const [deals, setDeals] = useState<OpenDeal[]>([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
-  const [sortKey, setSortKey] = useState<SortKey>('probability');
-  const [sortDesc, setSortDesc] = useState(true);
+  const [search, setSearch] = useState("");
+  const [sortKey, setSortKey] = useState<"probability" | "amount" | "closeDate">("probability");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
 
   useEffect(() => {
-    fetch('/api/deals').then(r => r.json()).then((d: DealsData) => {
-      setDeals(d.openDeals);
-      setLoading(false);
-    });
+    fetch("/api/deals?start=2025-01-01&end=2025-12-31")
+      .then(r => r.json())
+      .then(d => { setDeals(d.openDeals || []); setLoading(false); });
   }, []);
 
-  const filtered = deals
-    .filter(d => d.name.toLowerCase().includes(search.toLowerCase()) || d.company.toLowerCase().includes(search.toLowerCase()))
+  const today = new Date();
+
+  const toggleSort = (key: typeof sortKey) => {
+    if (sortKey === key) setSortDir(d => d === "asc" ? "desc" : "asc");
+    else { setSortKey(key); setSortDir("desc"); }
+  };
+
+  const sorted = [...deals]
+    .filter(d => d.name.toLowerCase().includes(search.toLowerCase()) || d.stage.toLowerCase().includes(search.toLowerCase()))
     .sort((a, b) => {
-      const va = a[sortKey]; const vb = b[sortKey];
-      if (typeof va === 'string' && typeof vb === 'string') return sortDesc ? vb.localeCompare(va) : va.localeCompare(vb);
-      return sortDesc ? (vb as number) - (va as number) : (va as number) - (vb as number);
+      let va: number, vb: number;
+      if (sortKey === "probability") { va = a.probability ?? -1; vb = b.probability ?? -1; }
+      else if (sortKey === "amount") { va = a.amount; vb = b.amount; }
+      else { va = a.closeDate ? new Date(a.closeDate).getTime() : 0; vb = b.closeDate ? new Date(b.closeDate).getTime() : 0; }
+      return sortDir === "desc" ? vb - va : va - vb;
     });
 
-  function toggleSort(key: SortKey) {
-    if (sortKey === key) setSortDesc(d => !d);
-    else { setSortKey(key); setSortDesc(true); }
-  }
+  const totalOpen = sorted.reduce((s, d) => s + d.amount, 0);
 
   const thStyle: React.CSSProperties = {
-    padding: '12px 16px', fontSize: 11, fontWeight: 700, letterSpacing: '0.06em',
-    textTransform: 'uppercase', color: 'var(--text-muted)', textAlign: 'left', cursor: 'pointer',
-    borderBottom: '1px solid var(--border-color)', whiteSpace: 'nowrap',
+    fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase",
+    letterSpacing: "0.06em", padding: "10px 14px", borderBottom: "1px solid var(--border-color)",
+    textAlign: "left", whiteSpace: "nowrap", cursor: "pointer", userSelect: "none",
   };
-  const tdStyle: React.CSSProperties = {
-    padding: '14px 16px', fontSize: 13, color: 'var(--text-secondary)',
-    borderBottom: '1px solid var(--border-color)',
-  };
+  const tdStyle: React.CSSProperties = { padding: "12px 14px", borderBottom: "1px solid var(--border-color)", fontSize: 13 };
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg-primary)', padding: '32px 36px', color: 'var(--text-primary)' }}>
-      <style>{`@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }`}</style>
-
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 28 }}>
+    <div style={{ color: "var(--text-primary)" }}>
+      {/* Header */}
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 20, flexWrap: "wrap", gap: 12 }}>
         <div>
-          <h1 style={{ fontSize: 26, fontWeight: 800, color: 'var(--text-primary)', marginBottom: 4 }}>Pipeline de Deals</h1>
-          <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>Todos os deals em aberto com busca e ordenação</p>
+          <h1 style={{ fontSize: 22, fontWeight: 800 }}>Deals em Aberto</h1>
+          <p style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 3 }}>Pipeline ativo ordenado por probabilidade de fechamento</p>
         </div>
-        <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: 10, padding: '8px 16px', fontSize: 13, color: 'var(--text-secondary)' }}>
-          {loading ? '...' : `${filtered.length} deals`}
+        <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+          <div style={{ fontSize: 13, color: "var(--text-muted)" }}>
+            <span style={{ fontWeight: 700, color: "var(--color-orange)" }}>{sorted.length}</span> deals •{" "}
+            <span style={{ fontWeight: 700, color: "var(--color-green)" }}>{BRL(totalOpen)}</span> em pipeline
+          </div>
         </div>
       </div>
 
       {/* Search */}
-      <div style={{ position: 'relative', maxWidth: 400, marginBottom: 24 }}>
-        <Search size={16} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+      <div style={{ background: "var(--bg-card)", border: "1px solid var(--border-color)", borderRadius: 10, padding: "10px 14px", marginBottom: 16, display: "flex", alignItems: "center", gap: 10 }}>
+        <Search size={15} style={{ color: "var(--text-muted)", flexShrink: 0 }} />
         <input
           value={search}
           onChange={e => setSearch(e.target.value)}
-          placeholder="Buscar por nome ou empresa..."
-          style={{
-            width: '100%', boxSizing: 'border-box', paddingLeft: 38, paddingRight: 16, paddingTop: 10, paddingBottom: 10,
-            background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: 10,
-            color: 'var(--text-primary)', fontSize: 13, outline: 'none',
-          }}
+          placeholder="Buscar por nome ou estágio..."
+          style={{ background: "transparent", border: "none", outline: "none", color: "var(--text-primary)", fontSize: 13, flex: 1 }}
         />
       </div>
 
-      {loading ? (
-        <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: 12, height: 400, animation: 'pulse 1.5s ease-in-out infinite' }} />
-      ) : (
-        <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: 12, overflow: 'hidden' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+      {/* Table */}
+      <div style={{ background: "var(--bg-card)", border: "1px solid var(--border-color)", borderRadius: 12, overflow: "hidden" }}>
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
-              <tr style={{ background: 'var(--bg-primary)' }}>
-                <th style={thStyle} onClick={() => toggleSort('name')}>
-                  Deal / Empresa {sortKey === 'name' ? (sortDesc ? '↓' : '↑') : ''}
-                </th>
+              <tr style={{ background: "var(--bg-secondary)" }}>
+                <th style={thStyle}>Deal</th>
                 <th style={thStyle}>Estágio</th>
-                <th style={{ ...thStyle, textAlign: 'right' }} onClick={() => toggleSort('amount')}>
-                  Valor {sortKey === 'amount' ? (sortDesc ? '↓' : '↑') : ''}
+                <th style={{ ...thStyle }} onClick={() => toggleSort("amount")}>
+                  Valor {sortKey === "amount" ? (sortDir === "desc" ? "↓" : "↑") : ""}
                 </th>
-                <th style={thStyle} onClick={() => toggleSort('closeDate')}>
-                  Fechamento {sortKey === 'closeDate' ? (sortDesc ? '↓' : '↑') : ''}
+                <th style={{ ...thStyle }} onClick={() => toggleSort("closeDate")}>
+                  Fecha em {sortKey === "closeDate" ? (sortDir === "desc" ? "↓" : "↑") : ""}
                 </th>
-                <th style={{ ...thStyle }} onClick={() => toggleSort('probability')}>
-                  Probabilidade {sortKey === 'probability' ? (sortDesc ? '↓' : '↑') : ''}
+                <th style={{ ...thStyle }} onClick={() => toggleSort("probability")}>
+                  Prob. {sortKey === "probability" ? (sortDir === "desc" ? "↓" : "↑") : ""}
                 </th>
+                <th style={thStyle}>Barra</th>
                 <th style={thStyle}>Status</th>
               </tr>
             </thead>
             <tbody>
-              {filtered.map((deal, i) => (
-                <tr key={deal.id} style={{ background: i % 2 === 0 ? 'transparent' : '#ffffff04' }}>
-                  <td style={tdStyle}>
-                    <div style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: 2 }}>{deal.name}</div>
-                    <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{deal.company}</div>
-                  </td>
-                  <td style={tdStyle}>
-                    <span style={{ fontSize: 12, color: 'var(--accent-purple)', background: '#6366f118', borderRadius: 6, padding: '3px 10px', fontWeight: 600 }}>
-                      {STAGE_LABELS[deal.stage] || deal.stage}
-                    </span>
-                  </td>
-                  <td style={{ ...tdStyle, textAlign: 'right', fontWeight: 700, color: 'var(--color-green)' }}>{brl(deal.amount)}</td>
-                  <td style={tdStyle}>{fmtDate(deal.closeDate)}</td>
-                  <td style={{ ...tdStyle, minWidth: 140 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <div style={{ flex: 1, height: 5, background: 'var(--bg-primary)', borderRadius: 99, overflow: 'hidden' }}>
-                        <div style={{ height: '100%', width: `${deal.probability}%`, background: deal.probability >= 70 ? '#22c55e' : deal.probability >= 40 ? '#f97316' : '#60a5fa', borderRadius: 99 }} />
+              {loading ? (
+                <tr><td colSpan={7} style={{ ...tdStyle, textAlign: "center", color: "var(--text-muted)", padding: 40 }}>Carregando...</td></tr>
+              ) : sorted.length === 0 ? (
+                <tr><td colSpan={7} style={{ ...tdStyle, textAlign: "center", color: "var(--text-muted)", padding: 40 }}>Nenhum deal encontrado</td></tr>
+              ) : sorted.map(d => {
+                const p = d.probability ?? null;
+                const color = p === null ? "#64748b" : p >= 70 ? "#22c55e" : p >= 40 ? "#f97316" : "#ef4444";
+                const isOverdue = d.closeDate && new Date(d.closeDate) < today;
+                return (
+                  <tr key={d.id} style={{ transition: "background .1s" }}
+                    onMouseEnter={e => (e.currentTarget.style.background = "var(--bg-secondary)")}
+                    onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
+                  >
+                    <td style={{ ...tdStyle, fontWeight: 600, maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.name}</td>
+                    <td style={{ ...tdStyle, color: "var(--text-secondary)" }}>{d.stage}</td>
+                    <td style={{ ...tdStyle, fontWeight: 600 }}>{BRL(d.amount)}</td>
+                    <td style={{ ...tdStyle, color: isOverdue ? "#ef4444" : "var(--text-secondary)" }}>
+                      {fmtDate(d.closeDate)}{isOverdue ? " ⚠" : ""}
+                    </td>
+                    <td style={{ ...tdStyle, fontWeight: 700, color }}>{p !== null ? `${p}%` : "—"}</td>
+                    <td style={tdStyle}>
+                      <div style={{ width: 80, height: 5, background: "var(--bg-secondary)", borderRadius: 3, overflow: "hidden" }}>
+                        <div style={{ height: "100%", width: `${p ?? 0}%`, background: color, borderRadius: 3 }} />
                       </div>
-                      <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', minWidth: 32 }}>{deal.probability}%</span>
-                    </div>
-                  </td>
-                  <td style={tdStyle}><StatusBadge probability={deal.probability} /></td>
-                </tr>
-              ))}
-              {filtered.length === 0 && (
-                <tr><td colSpan={6} style={{ ...tdStyle, textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>Nenhum deal encontrado</td></tr>
-              )}
+                    </td>
+                    <td style={tdStyle}><Badge p={p} /></td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
-      )}
+      </div>
     </div>
   );
 }

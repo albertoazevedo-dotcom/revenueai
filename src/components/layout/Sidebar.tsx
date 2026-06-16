@@ -8,15 +8,15 @@ import {
   Bot,
   BookOpen,
   ChevronRight,
-  PieChart,
+  GitBranch,
   AlertTriangle,
 } from "lucide-react";
 
 const nav = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/pipeline", label: "Pipeline", icon: PieChart },
-  { href: "/perdas", label: "Perdas", icon: AlertTriangle },
-  { href: "/crm", label: "CRM", icon: Users },
+  { href: "/pipeline", label: "Pipeline", icon: GitBranch },
+  { href: "/perdas", label: "Análise de Perdas", icon: AlertTriangle },
+  { href: "/crm", label: "CRM Integrado", icon: Users },
   { href: "/enablement", label: "Enablement", icon: ShieldCheck },
   { href: "/agentes-ia", label: "Agentes IA", icon: Bot },
 ];
@@ -27,7 +27,6 @@ const edu = [
 
 export function Sidebar() {
   const pathname = usePathname();
-
   const isActive = (href: string) => pathname === href || pathname.startsWith(href + "/");
 
   return (

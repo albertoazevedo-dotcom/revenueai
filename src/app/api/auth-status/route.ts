@@ -1,3 +1,5 @@
+import { NextResponse } from "next/server";
+
 export async function GET() {
-  return Response.json({ authenticated: true });
+  return NextResponse.json({ authenticated: true });
 }
